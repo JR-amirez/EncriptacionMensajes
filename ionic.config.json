@@ -1,0 +1,7 @@
+{
+  "name": "EncriptacionMensajes",
+  "integrations": {
+    "capacitor": {}
+  },
+  "type": "react-vite"
+}
