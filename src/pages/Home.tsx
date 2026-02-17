@@ -106,7 +106,7 @@ const Home: React.FC<PlayProps> = ({ difficulty = "basic" }) => {
   useEffect(() => {
     const cargarConfig = async () => {
       try {
-        const res = await fetch("/config/memorama-config.json");
+        const res = await fetch("/config/encriptacion-config.json");
 
         if (!res.ok) {
           setConfigLoaded(true);
