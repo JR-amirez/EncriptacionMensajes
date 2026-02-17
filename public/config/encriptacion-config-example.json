@@ -1,0 +1,9 @@
+{
+  "nivel": "basico",
+  "autor": "Nombre del autor",
+  "version": "1.0",
+  "fecha": "2025-12-02",
+  "descripcion": "Juego de encriptación y desencriptación de mensajes usando cifrados clásicos",
+  "nombreApp": "CriptoMensajes",
+  "plataformas": ["android"]
+}
