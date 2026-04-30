@@ -114,6 +114,16 @@ const WORD_BANK: Record<Difficulty, WordBankEntry[]> = {
 };
 
 const VIGENERE_KEYWORDS = ["sol", "luna", "mar", "rio", "luz", "ojo", "pan", "sal"];
+const DEFAULT_TOTAL_EXERCISES: Record<Difficulty, number> = {
+  basic: 8,
+  intermediate: 6,
+  advanced: 5,
+};
+const POINTS_PER_DIFFICULTY: Record<Difficulty, number> = {
+  basic: 10,
+  intermediate: 15,
+  advanced: 20,
+};
 
 // ─── Generación de ejercicios ───
 
@@ -187,21 +197,37 @@ export function checkAnswer(userAnswer: string, correctAnswer: string): boolean 
 
 // ─── Configuración por dificultad ───
 
-export function getGameConfig(difficulty: Difficulty): GameConfig {
-  switch (difficulty) {
-    case "basic":
-      return { totalExercises: 8, pointsCorrect: 10 };
-    case "intermediate":
-      return { totalExercises: 6, pointsCorrect: 15 };
-    case "advanced":
-      return { totalExercises: 5, pointsCorrect: 20 };
+export function resolveExerciseCount(
+  difficulty: Difficulty,
+  requestedCount?: number | null,
+): number {
+  const fallbackCount = DEFAULT_TOTAL_EXERCISES[difficulty];
+  const normalizedCount =
+    typeof requestedCount === "number" && Number.isFinite(requestedCount)
+      ? Math.floor(requestedCount)
+      : fallbackCount;
+
+  if (normalizedCount <= 0) {
+    return Math.min(fallbackCount, WORD_BANK[difficulty].length);
   }
+
+  return Math.min(normalizedCount, WORD_BANK[difficulty].length);
+}
+
+export function getGameConfig(
+  difficulty: Difficulty,
+  requestedCount?: number | null,
+): GameConfig {
+  return {
+    totalExercises: resolveExerciseCount(difficulty, requestedCount),
+    pointsCorrect: POINTS_PER_DIFFICULTY[difficulty],
+  };
 }
 
 export function getTotalTime(difficulty: Difficulty): number {
   switch (difficulty) {
     case "basic":
-      return 120;
+      return 1200;
     case "intermediate":
       return 150;
     case "advanced":

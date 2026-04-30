@@ -32,6 +32,7 @@ import {
   getGameConfig,
   getTotalTime,
 } from "../utils/ciphers";
+import ARModal, { ARTipo } from "../components/ARModal";
 
 type Difficulty = "basic" | "intermediate" | "advanced";
 
@@ -47,6 +48,17 @@ type ConfettiPiece = {
   color: string;
 };
 
+type ARSeccionConfig = {
+  activo?: boolean;
+  fondo?: string;
+  contenido?: {
+    texto?: string;
+    imagen?: string;
+    audio?: string;
+    video?: string;
+  };
+};
+
 type MemoramaRuntimeConfig = {
   nivel?: string;
   autor?: string;
@@ -55,6 +67,13 @@ type MemoramaRuntimeConfig = {
   descripcion?: string;
   nombreApp?: string;
   plataformas?: string[];
+  numeroJuegos?: number;
+  numeroEjercicios?: number;
+  ar?: {
+    inicio?: ARSeccionConfig;
+    acierto?: ARSeccionConfig;
+    fin?: ARSeccionConfig;
+  };
 };
 
 const Home: React.FC<PlayProps> = ({ difficulty = "basic" }) => {
@@ -86,6 +105,9 @@ const Home: React.FC<PlayProps> = ({ difficulty = "basic" }) => {
   const [maxScore, setMaxScore] = useState<number>(0);
   const [showExitModal, setShowExitModal] = useState<boolean>(false);
   const [configLoaded, setConfigLoaded] = useState<boolean>(false);
+  const [configuredExerciseCount, setConfiguredExerciseCount] = useState<
+    number | null
+  >(null);
   const [tiempoRestante, setTiempoRestante] = useState(0);
 
   // Game state
@@ -97,6 +119,13 @@ const Home: React.FC<PlayProps> = ({ difficulty = "basic" }) => {
   const [gameActive, setGameActive] = useState<boolean>(false);
   const [showHint, setShowHint] = useState<boolean>(false);
   const [wheelRotation, setWheelRotation] = useState<number>(0);
+
+  // ── Realidad Aumentada ──────────────────────────────────────────
+  const [showARModal, setShowARModal] = useState<boolean>(false);
+  const [arTipo, setARTipo] = useState<ARTipo>("inicio");
+  const arConfigRef = useRef<MemoramaRuntimeConfig["ar"]>(undefined);
+  const arOnCloseRef = useRef<(() => void) | null>(null);
+  const pendingARInicioRef = useRef<boolean>(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const wheelRef = useRef<HTMLDivElement>(null);
@@ -125,6 +154,14 @@ const Home: React.FC<PlayProps> = ({ difficulty = "basic" }) => {
         if (data.descripcion) setAppDescripcion(data.descripcion);
         if (data.plataformas) setAppPlataformas(data.plataformas.join(", "));
         if (data.nombreApp) setAppNombreJuego(data.nombreApp);
+        const configuredCounts = [
+          parseExerciseCount(data.numeroEjercicios),
+          parseExerciseCount(data.numeroJuegos),
+        ].filter((value): value is number => value !== null);
+        if (configuredCounts.length > 0) {
+          setConfiguredExerciseCount(Math.min(...configuredCounts));
+        }
+        if (data.ar) arConfigRef.current = data.ar;
       } catch (err) {
         console.error("No se pudo cargar memorama-config.json", err);
       } finally {
@@ -134,6 +171,30 @@ const Home: React.FC<PlayProps> = ({ difficulty = "basic" }) => {
 
     cargarConfig();
   }, []);
+
+  // ── Helpers de Realidad Aumentada ──────────────────────────────
+  const openAR = (tipo: ARTipo, onClose: () => void) => {
+    const seccion = arConfigRef.current?.[tipo];
+    const hasContent =
+      seccion?.contenido &&
+      Object.values(seccion.contenido).some(
+        (v) => typeof v === "string" && v.trim() !== "",
+      );
+    if (seccion?.activo && hasContent) {
+      setARTipo(tipo);
+      arOnCloseRef.current = onClose;
+      setShowARModal(true);
+    } else {
+      onClose();
+    }
+  };
+
+  const handleARClose = () => {
+    setShowARModal(false);
+    const cb = arOnCloseRef.current;
+    arOnCloseRef.current = null;
+    cb?.();
+  };
 
   // Countdown timer
   useEffect(() => {
@@ -146,10 +207,18 @@ const Home: React.FC<PlayProps> = ({ difficulty = "basic" }) => {
     } else if (showCountdown && countdown === 0) {
       setTimeout(() => {
         setShowCountdown(false);
-        startGameLogic();
       }, 500);
     }
   }, [countdown, showCountdown]);
+
+  // Dispara AR "inicio" justo después de que el contador llega a 0
+  useEffect(() => {
+    if (!showCountdown && pendingARInicioRef.current && configLoaded) {
+      pendingARInicioRef.current = false;
+      openAR("inicio", () => startGameLogic());
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showCountdown, configLoaded]);
 
   // Game timer
   useEffect(() => {
@@ -158,6 +227,7 @@ const Home: React.FC<PlayProps> = ({ difficulty = "basic" }) => {
       isPaused ||
       showCountdown ||
       showFeedback ||
+      showARModal ||
       tiempoRestante <= 0
     )
       return;
@@ -179,6 +249,7 @@ const Home: React.FC<PlayProps> = ({ difficulty = "basic" }) => {
     isPaused,
     showCountdown,
     showFeedback,
+    showARModal,
     tiempoRestante,
     currentExerciseIndex,
   ]);
@@ -360,6 +431,12 @@ const Home: React.FC<PlayProps> = ({ difficulty = "basic" }) => {
     return `${Number(day)} de ${meses[mesIndex]} del ${year}`;
   };
 
+  const parseExerciseCount = (value?: number | null): number | null => {
+    if (typeof value !== "number" || !Number.isFinite(value)) return null;
+    const normalizedValue = Math.floor(value);
+    return normalizedValue > 0 ? normalizedValue : null;
+  };
+
   const getInstructions = (): string => {
     switch (difficultyConfig) {
       case "basic":
@@ -373,11 +450,12 @@ const Home: React.FC<PlayProps> = ({ difficulty = "basic" }) => {
 
   // ─── Game logic ───
 
+  const gameConfig = getGameConfig(difficultyConfig, configuredExerciseCount);
+
   const startGameLogic = () => {
-    const config = getGameConfig(difficultyConfig);
     const newExercises = generateExercises(
       difficultyConfig,
-      config.totalExercises,
+      gameConfig.totalExercises,
     );
     setExercises(newExercises);
     setCurrentExerciseIndex(0);
@@ -385,7 +463,7 @@ const Home: React.FC<PlayProps> = ({ difficulty = "basic" }) => {
     setTotalCorrect(0);
     setTotalAnswered(0);
     setScore(0);
-    setMaxScore(config.totalExercises * config.pointsCorrect);
+    setMaxScore(newExercises.length * gameConfig.pointsCorrect);
     setTiempoRestante(getTotalTime(difficultyConfig));
     setGameActive(true);
     setShowHint(false);
@@ -393,7 +471,7 @@ const Home: React.FC<PlayProps> = ({ difficulty = "basic" }) => {
 
   const endGame = () => {
     setGameActive(false);
-    setShowSummary(true);
+    openAR("fin", () => setShowSummary(true));
   };
 
   const advanceAfterFeedback = () => {
@@ -416,7 +494,6 @@ const Home: React.FC<PlayProps> = ({ difficulty = "basic" }) => {
 
     const currentExercise = exercises[currentExerciseIndex];
     const isCorrect = checkAnswer(userInput, currentExercise.plainText);
-    const config = getGameConfig(difficultyConfig);
 
     const updatedExercises = [...exercises];
     updatedExercises[currentExerciseIndex] = {
@@ -427,21 +504,29 @@ const Home: React.FC<PlayProps> = ({ difficulty = "basic" }) => {
     setExercises(updatedExercises);
 
     if (isCorrect) {
-      setScore((prev) => prev + config.pointsCorrect);
+      setScore((prev) => prev + gameConfig.pointsCorrect);
       setTotalCorrect((prev) => prev + 1);
-      setFeedbackMessage("¡Correcto!");
-    } else {
-      setFeedbackMessage(
-        `Incorrecto. La respuesta era: ${currentExercise.plainText.toUpperCase()}`,
-      );
     }
 
     setTotalAnswered((prev) => prev + 1);
-    setShowFeedback(true);
 
-    setTimeout(() => {
-      advanceAfterFeedback();
-    }, 1800);
+    const continueAfterAnswer = () => {
+      setFeedbackMessage(
+        isCorrect
+          ? "¡Correcto!"
+          : `Incorrecto. La respuesta era: ${currentExercise.plainText.toUpperCase()}`,
+      );
+      setShowFeedback(true);
+      setTimeout(() => {
+        advanceAfterFeedback();
+      }, 1800);
+    };
+
+    if (isCorrect) {
+      openAR("acierto", continueAfterAnswer);
+    } else {
+      continueAfterAnswer();
+    }
   };
 
   const handleSkipExercise = () => {
@@ -527,6 +612,7 @@ const Home: React.FC<PlayProps> = ({ difficulty = "basic" }) => {
   };
 
   const resetGame = () => {
+    pendingARInicioRef.current = true;
     setCountdown(5);
     setShowCountdown(true);
     setActiveButtonIndex(null);
@@ -554,6 +640,10 @@ const Home: React.FC<PlayProps> = ({ difficulty = "basic" }) => {
 
   const currentExercise =
     exercises.length > 0 ? exercises[currentExerciseIndex] : null;
+  const visibleExerciseCount =
+    exercises.length > 0 ? exercises.length : gameConfig.totalExercises;
+  const visibleExerciseNumber =
+    exercises.length > 0 ? currentExerciseIndex + 1 : 0;
 
   // ─── Cipher wheel ───
 
@@ -705,13 +795,17 @@ const Home: React.FC<PlayProps> = ({ difficulty = "basic" }) => {
                 <p className="data">{appFecha}</p>
               </div>
               <div className="card">
+                <p className="title">AUTOR</p>
+                <p className="data">{appAutor}</p>
+              </div>
+              <div className="card">
                 <p className="title">PLATAFORMAS</p>
                 <p className="data">{formatPlataforma(appPlataformas)}</p>
               </div>
               <div className="card">
                 <p className="title">NÚMERO DE EJERCICIOS</p>
                 <p className="data">
-                  {getGameConfig(difficultyConfig).totalExercises}
+                  {gameConfig.totalExercises}
                 </p>
               </div>
               <div className="card description">
@@ -765,6 +859,15 @@ const Home: React.FC<PlayProps> = ({ difficulty = "basic" }) => {
             </IonButton>
           </div>
         </div>
+      )}
+
+      {showARModal && (
+        <ARModal
+          tipo={arTipo}
+          contenido={arConfigRef.current?.[arTipo]?.contenido ?? {}}
+          fondo={arConfigRef.current?.[arTipo]?.fondo}
+          onClose={handleARClose}
+        />
       )}
 
       <IonContent fullscreen className="ion-padding">
@@ -844,7 +947,7 @@ const Home: React.FC<PlayProps> = ({ difficulty = "basic" }) => {
             <div className="instructions-exercises">
               <div className="num-words play">
                 <strong>
-                  Juego {currentExerciseIndex + 1} de {exercises.length}
+                  Juego {visibleExerciseNumber} de {visibleExerciseCount}
                 </strong>
               </div>
 

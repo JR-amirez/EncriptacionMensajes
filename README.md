@@ -160,3 +160,71 @@ npm run build
     ├── clean:assets           → Elimina archivos innecesarios
     └── zip:android            → Genera android-base.zip
 ```
+
+### Configuracion de Realidad Aumentada (`ar`)
+
+La propiedad `ar` permite configurar experiencias de Realidad Aumentada que se muestran en tres momentos del juego. Cada fase puede activarse de forma independiente y mostrar distintos tipos de contenido en 3D.
+
+#### Fases disponibles
+
+| Fase | Cuando se muestra | Camara activa |
+|------|-------------------|---------------|
+| `inicio` | Al terminar la cuenta regresiva, antes de comenzar los ejercicios | No |
+| `acierto` | Cada vez que el jugador responde correctamente | Si (camara trasera del dispositivo) |
+| `fin` | Al completar todos los ejercicios, antes de la pantalla de resultados | No |
+
+#### Estructura
+
+Cada fase comparte el mismo esquema de propiedades:
+
+```json
+{
+    "ar": {
+        "inicio": {
+            "activo": true,
+            "contenido": {
+                "texto": "Preparate para jugar!",
+                "imagen": "/data/images/mi-imagen.png",
+                "audio": "/data/audios/mi-audio.mp3",
+                "video": "/data/videos/mi-video.mp4"
+            }
+        },
+        "acierto": {
+            "activo": true,
+            "contenido": {
+                "texto": "Correcto!",
+                "audio": "/data/audios/aplauso.mp3"
+            }
+        },
+        "fin": {
+            "activo": true,
+            "contenido": {
+                "video": "/data/videos/fin.mp4"
+            }
+        }
+    }
+}
+```
+
+#### Propiedades de cada fase
+
+| Propiedad | Tipo | Descripcion |
+|-----------|------|-------------|
+| `activo` | `boolean` | Activa o desactiva la fase. Si es `false` o esta ausente, la fase se omite por completo |
+| `contenido.texto` | `string` | Texto que se renderiza como geometria 3D flotante en la pantalla |
+| `contenido.imagen` | `string` | Ruta a una imagen que se muestra rotando en 3D |
+| `contenido.audio` | `string` | Ruta a un archivo de audio que se reproduce automaticamente al abrir la fase |
+| `contenido.video` | `string` | Ruta a un video que se despliega con efecto de portal 3D |
+
+#### Comportamiento del contenido
+
+- La fase **solo se muestra** si `activo` es `true` **y** al menos un campo de `contenido` tiene un valor no vacio.
+- Se pueden combinar multiples tipos en la misma fase (texto + imagen + audio + video simultaneamente).
+- Si se proporciona unicamente `audio` (sin contenido visual), se renderiza un reproductor de audio visible. Si existe contenido visual ademas del audio, el audio se reproduce en segundo plano de forma invisible.
+- Las rutas de los archivos de `contenido` son relativas a la carpeta `public/` del proyecto (por ejemplo, `/data/images/foto.png` corresponde a `public/data/images/foto.png`).
+- En la fase `acierto` se activa automaticamente la **camara trasera** del dispositivo como fondo.
+
+#### Notas
+
+- La propiedad `ar` completa es **opcional**. Si no se incluye, el juego funciona normalmente sin mostrar ninguna experiencia de RA.
+- Cada fase (`inicio`, `acierto`, `fin`) es tambien independientemente opcional.
