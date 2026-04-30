@@ -1,4 +1,4 @@
-package io.ionic.starter;
+package io.criptomensajes.steam;
 
 import com.getcapacitor.BridgeActivity;
 
