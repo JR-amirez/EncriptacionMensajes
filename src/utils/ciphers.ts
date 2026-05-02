@@ -24,39 +24,6 @@ export function caesarEncrypt(text: string, shift: number): string {
     .join("");
 }
 
-// ─── Cifrado Atbash ───
-
-export function atbashEncrypt(text: string): string {
-  const normalized = normalize(text);
-  return normalized
-    .split("")
-    .map((char) => {
-      const idx = ALPHABET.indexOf(char);
-      if (idx === -1) return char;
-      return ALPHABET[25 - idx];
-    })
-    .join("");
-}
-
-// ─── Cifrado Vigenère ───
-
-export function vigenereEncrypt(text: string, keyword: string): string {
-  const normalized = normalize(text);
-  const key = normalize(keyword);
-  let keyIndex = 0;
-
-  return normalized
-    .split("")
-    .map((char) => {
-      const idx = ALPHABET.indexOf(char);
-      if (idx === -1) return char;
-      const shift = ALPHABET.indexOf(key[keyIndex % key.length]);
-      keyIndex++;
-      return ALPHABET[(idx + shift) % 26];
-    })
-    .join("");
-}
-
 // ─── Banco de palabras ───
 
 const WORD_BANK: Record<Difficulty, WordBankEntry[]> = {
@@ -113,7 +80,6 @@ const WORD_BANK: Record<Difficulty, WordBankEntry[]> = {
   ],
 };
 
-const VIGENERE_KEYWORDS = ["sol", "luna", "mar", "rio", "luz", "ojo", "pan", "sal"];
 const DEFAULT_TOTAL_EXERCISES: Record<Difficulty, number> = {
   basic: 8,
   intermediate: 6,
@@ -124,6 +90,25 @@ const POINTS_PER_DIFFICULTY: Record<Difficulty, number> = {
   intermediate: 15,
   advanced: 20,
 };
+const SHIFT_BY_DIFFICULTY: Record<Difficulty, number> = {
+  basic: 0,
+  intermediate: 19,
+  advanced: 13,
+};
+
+export function getShiftForDifficulty(difficulty: Difficulty): number {
+  return SHIFT_BY_DIFFICULTY[difficulty];
+}
+
+export function getCaesarNumbers(text: string, shift: number): string {
+  return normalize(text)
+    .split("")
+    .map((char) => {
+      const idx = ALPHABET.indexOf(char);
+      return idx === -1 ? char : String(((idx + shift) % 26) + 1);
+    })
+    .join(" ");
+}
 
 // ─── Generación de ejercicios ───
 
@@ -140,52 +125,18 @@ export function generateExercises(difficulty: Difficulty, count: number): Exerci
 
   return selected.map((entry, index) => {
     const plainNormalized = normalize(entry.word);
+    const shift = getShiftForDifficulty(difficulty);
 
-    switch (difficulty) {
-      case "basic": {
-        const shift = Math.floor(Math.random() * 10) + 1;
-        return {
-          id: index,
-          plainText: plainNormalized,
-          encryptedText: caesarEncrypt(entry.word, shift).toUpperCase(),
-          cipherType: "caesar",
-          hint: `Desplazamiento: ${shift}`,
-          category: entry.category,
-          shiftValue: shift,
-          answered: false,
-          correct: null,
-        };
-      }
-      case "intermediate": {
-        return {
-          id: index,
-          plainText: plainNormalized,
-          encryptedText: atbashEncrypt(entry.word).toUpperCase(),
-          cipherType: "atbash",
-          hint: "A=Z, B=Y, C=X, D=W...",
-          category: entry.category,
-          shiftValue: 0,
-          answered: false,
-          correct: null,
-        };
-      }
-      case "advanced": {
-        const keyword =
-          VIGENERE_KEYWORDS[Math.floor(Math.random() * VIGENERE_KEYWORDS.length)];
-        const keyShift = ALPHABET.indexOf(keyword[0]);
-        return {
-          id: index,
-          plainText: plainNormalized,
-          encryptedText: vigenereEncrypt(entry.word, keyword).toUpperCase(),
-          cipherType: "vigenere",
-          hint: `Palabra clave: ${keyword.toUpperCase()}`,
-          category: entry.category,
-          shiftValue: keyShift,
-          answered: false,
-          correct: null,
-        };
-      }
-    }
+    return {
+      id: index,
+      plainText: plainNormalized,
+      encryptedText: caesarEncrypt(entry.word, shift).toUpperCase(),
+      cipherType: "caesar",
+      category: entry.category,
+      shiftValue: shift,
+      answered: false,
+      correct: null,
+    };
   });
 }
 

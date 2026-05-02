@@ -28,8 +28,10 @@ import { App } from "@capacitor/app";
 import type { Exercise } from "../types/game";
 import {
   checkAnswer,
+  getCaesarNumbers,
   generateExercises,
   getGameConfig,
+  getShiftForDifficulty,
   getTotalTime,
 } from "../utils/ciphers";
 import ARModal, { ARTipo } from "../components/ARModal";
@@ -117,8 +119,6 @@ const Home: React.FC<PlayProps> = ({ difficulty = "basic" }) => {
   const [totalCorrect, setTotalCorrect] = useState<number>(0);
   const [totalAnswered, setTotalAnswered] = useState<number>(0);
   const [gameActive, setGameActive] = useState<boolean>(false);
-  const [showHint, setShowHint] = useState<boolean>(false);
-  const [wheelRotation, setWheelRotation] = useState<number>(0);
 
   // ── Realidad Aumentada ──────────────────────────────────────────
   const [showARModal, setShowARModal] = useState<boolean>(false);
@@ -128,9 +128,6 @@ const Home: React.FC<PlayProps> = ({ difficulty = "basic" }) => {
   const pendingARInicioRef = useRef<boolean>(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
-  const wheelRef = useRef<HTMLDivElement>(null);
-  const isDragging = useRef(false);
-  const lastAngle = useRef(0);
 
   useEffect(() => {
     const cargarConfig = async () => {
@@ -254,9 +251,8 @@ const Home: React.FC<PlayProps> = ({ difficulty = "basic" }) => {
     currentExerciseIndex,
   ]);
 
-  // Reset wheel rotation on exercise change
+  // Reset timer on exercise change
   useEffect(() => {
-    setWheelRotation(0);
     if (gameActive) {
       setTiempoRestante(getTotalTime(difficultyConfig));
     }
@@ -294,62 +290,6 @@ const Home: React.FC<PlayProps> = ({ difficulty = "basic" }) => {
     }, 1800);
   };
 
-  // ─── Wheel drag handlers ───
-
-  const getAngleFromCenter = (clientX: number, clientY: number): number => {
-    if (!wheelRef.current) return 0;
-    const rect = wheelRef.current.getBoundingClientRect();
-    const cx = rect.left + rect.width / 2;
-    const cy = rect.top + rect.height / 2;
-    return Math.atan2(clientY - cy, clientX - cx) * (180 / Math.PI);
-  };
-
-  const handleWheelTouchStart = (e: React.TouchEvent) => {
-    const touch = e.touches[0];
-    lastAngle.current = getAngleFromCenter(touch.clientX, touch.clientY);
-    isDragging.current = true;
-  };
-
-  const handleWheelTouchMove = (e: React.TouchEvent) => {
-    if (!isDragging.current) return;
-    const touch = e.touches[0];
-    const angle = getAngleFromCenter(touch.clientX, touch.clientY);
-    let delta = angle - lastAngle.current;
-    if (delta > 180) delta -= 360;
-    if (delta < -180) delta += 360;
-    setWheelRotation((prev) => prev + delta);
-    lastAngle.current = angle;
-  };
-
-  const handleWheelTouchEnd = () => {
-    isDragging.current = false;
-  };
-
-  const handleWheelMouseDown = (e: React.MouseEvent) => {
-    e.preventDefault();
-    lastAngle.current = getAngleFromCenter(e.clientX, e.clientY);
-    isDragging.current = true;
-
-    const onMouseMove = (ev: MouseEvent) => {
-      if (!isDragging.current) return;
-      const angle = getAngleFromCenter(ev.clientX, ev.clientY);
-      let delta = angle - lastAngle.current;
-      if (delta > 180) delta -= 360;
-      if (delta < -180) delta += 360;
-      setWheelRotation((prev) => prev + delta);
-      lastAngle.current = angle;
-    };
-
-    const onMouseUp = () => {
-      isDragging.current = false;
-      window.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener("mouseup", onMouseUp);
-    };
-
-    window.addEventListener("mousemove", onMouseMove);
-    window.addEventListener("mouseup", onMouseUp);
-  };
-
   const getDifficultyLabel = (nivel: Difficulty): string => {
     const labels: Record<Difficulty, string> = {
       basic: "Básico",
@@ -362,8 +302,6 @@ const Home: React.FC<PlayProps> = ({ difficulty = "basic" }) => {
   const getCipherLabel = (type: string): string => {
     const labels: Record<string, string> = {
       caesar: "Cifrado César",
-      atbash: "Cifrado Atbash",
-      vigenere: "Cifrado Vigenère",
     };
     return labels[type] ?? type;
   };
@@ -438,14 +376,7 @@ const Home: React.FC<PlayProps> = ({ difficulty = "basic" }) => {
   };
 
   const getInstructions = (): string => {
-    switch (difficultyConfig) {
-      case "basic":
-        return "Descifra el mensaje usando el Cifrado César. Cada letra ha sido desplazada un número fijo de posiciones en el alfabeto. Usa la pista del desplazamiento para encontrar la palabra original.";
-      case "intermediate":
-        return "Descifra el mensaje usando el Cifrado Atbash. El alfabeto está invertido: A=Z, B=Y, C=X... Invierte cada letra para descubrir la palabra.";
-      case "advanced":
-        return "Descifra el mensaje usando el Cifrado Vigenère. Cada letra se desplaza según la letra correspondiente de la palabra clave. Usa la palabra clave para descifrar.";
-    }
+    return "Descifra el mensaje usando el Cifrado César. Cada letra ha sido desplazada un número fijo de posiciones en el alfabeto para encontrar la palabra original.";
   };
 
   // ─── Game logic ───
@@ -466,7 +397,6 @@ const Home: React.FC<PlayProps> = ({ difficulty = "basic" }) => {
     setMaxScore(newExercises.length * gameConfig.pointsCorrect);
     setTiempoRestante(getTotalTime(difficultyConfig));
     setGameActive(true);
-    setShowHint(false);
   };
 
   const endGame = () => {
@@ -477,7 +407,6 @@ const Home: React.FC<PlayProps> = ({ difficulty = "basic" }) => {
   const advanceAfterFeedback = () => {
     setShowFeedback(false);
     setUserInput("");
-    setShowHint(false);
 
     setCurrentExerciseIndex((prev) => {
       const next = prev + 1;
@@ -626,10 +555,8 @@ const Home: React.FC<PlayProps> = ({ difficulty = "basic" }) => {
     setTotalCorrect(0);
     setTotalAnswered(0);
     setGameActive(false);
-    setShowHint(false);
     setShowSummary(false);
     setShowFeedback(false);
-    setWheelRotation(0);
   };
 
   const formatearTiempo = (segundos: number) => {
@@ -648,8 +575,17 @@ const Home: React.FC<PlayProps> = ({ difficulty = "basic" }) => {
   // ─── Cipher wheel ───
 
   const ALPHABET_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+  const INNER_WHEEL_NUMBERS = Array.from({ length: 26 }, (_, i) =>
+    String(i + 1),
+  );
   const OUTER_R = 123;
   const INNER_R = 92;
+  const currentShift =
+    currentExercise?.shiftValue ?? getShiftForDifficulty(difficultyConfig);
+  const innerWheelRotation = ((26 - currentShift) % 26) * (360 / 26);
+  const encryptedTextNumbers = currentExercise
+    ? getCaesarNumbers(currentExercise.plainText, currentShift)
+    : "";
 
   return (
     <IonPage>
@@ -981,19 +917,12 @@ const Home: React.FC<PlayProps> = ({ difficulty = "basic" }) => {
               </div>
 
               <div className="cipher-wheel-container">
-                <div
-                  className="cipher-wheel"
-                  ref={wheelRef}
-                  onTouchStart={handleWheelTouchStart}
-                  onTouchMove={handleWheelTouchMove}
-                  onTouchEnd={handleWheelTouchEnd}
-                  onMouseDown={handleWheelMouseDown}
-                >
+                <div className="cipher-wheel">
                   <div className="wheel-ring outer-ring" />
                   <div className="wheel-ring middle-ring" />
                   <div className="wheel-center">
                     <span className="wheel-center-label">
-                      {currentExercise?.encryptedText}
+                      {encryptedTextNumbers}
                     </span>
                   </div>
 
@@ -1017,9 +946,9 @@ const Home: React.FC<PlayProps> = ({ difficulty = "basic" }) => {
 
                   <div
                     className="wheel-inner-rotatable"
-                    style={{ transform: `rotate(${wheelRotation}deg)` }}
+                    style={{ transform: `rotate(${innerWheelRotation}deg)` }}
                   >
-                    {ALPHABET_LETTERS.map((letter, i) => {
+                    {INNER_WHEEL_NUMBERS.map((number, i) => {
                       const angleDeg = (i / 26) * 360 - 90;
                       const rad = (angleDeg * Math.PI) / 180;
                       const x = INNER_R * Math.cos(rad);
@@ -1029,30 +958,15 @@ const Home: React.FC<PlayProps> = ({ difficulty = "basic" }) => {
                           key={`i-${i}`}
                           className="wheel-letter inner"
                           style={{
-                            transform: `translate(calc(-50% + ${x}px), calc(-50% + ${y}px)) rotate(${-wheelRotation}deg)`,
+                            transform: `translate(calc(-50% + ${x}px), calc(-50% + ${y}px)) rotate(${-innerWheelRotation}deg)`,
                           }}
                         >
-                          {letter}
+                          {number}
                         </span>
                       );
                     })}
                   </div>
                 </div>
-              </div>
-
-              <div className="hint-section">
-                <IonButton
-                  fill="outline"
-                  size="small"
-                  disabled={showHint}
-                  onClick={() => setShowHint(!showHint)}
-                  className="hint-button"
-                >
-                  Mostrar pista
-                </IonButton>
-                {showHint && (
-                  <div className="hint-text">{currentExercise?.hint}</div>
-                )}
               </div>
 
               <div className="answer-section">

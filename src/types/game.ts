@@ -1,6 +1,6 @@
 export type Difficulty = "basic" | "intermediate" | "advanced";
 
-export type CipherType = "caesar" | "atbash" | "vigenere";
+export type CipherType = "caesar";
 
 export interface WordBankEntry {
   word: string;
@@ -12,7 +12,6 @@ export interface Exercise {
   plainText: string;
   encryptedText: string;
   cipherType: CipherType;
-  hint: string;
   category: string;
   shiftValue: number;
   answered: boolean;
