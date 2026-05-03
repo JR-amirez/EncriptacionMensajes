@@ -61,7 +61,7 @@ type ARSeccionConfig = {
   };
 };
 
-type MemoramaRuntimeConfig = {
+type EncriptacionRuntimeConfig = {
   nivel?: string;
   autor?: string;
   version?: string;
@@ -70,7 +70,7 @@ type MemoramaRuntimeConfig = {
   nombreApp?: string;
   plataformas?: string[];
   numeroJuegos?: number;
-  numeroEjercicios?: number;
+  ejercicios?: number;
   ar?: {
     inicio?: ARSeccionConfig;
     acierto?: ARSeccionConfig;
@@ -123,7 +123,7 @@ const Home: React.FC<PlayProps> = ({ difficulty = "basic" }) => {
   // ── Realidad Aumentada ──────────────────────────────────────────
   const [showARModal, setShowARModal] = useState<boolean>(false);
   const [arTipo, setARTipo] = useState<ARTipo>("inicio");
-  const arConfigRef = useRef<MemoramaRuntimeConfig["ar"]>(undefined);
+  const arConfigRef = useRef<EncriptacionRuntimeConfig["ar"]>(undefined);
   const arOnCloseRef = useRef<(() => void) | null>(null);
   const pendingARInicioRef = useRef<boolean>(false);
 
@@ -139,7 +139,7 @@ const Home: React.FC<PlayProps> = ({ difficulty = "basic" }) => {
           return;
         }
 
-        const data: MemoramaRuntimeConfig = await res.json();
+        const data: EncriptacionRuntimeConfig = await res.json();
 
         if (data.nivel) {
           setDifficultyConfig(normalizarNivelConfig(data.nivel));
@@ -152,7 +152,7 @@ const Home: React.FC<PlayProps> = ({ difficulty = "basic" }) => {
         if (data.plataformas) setAppPlataformas(data.plataformas.join(", "));
         if (data.nombreApp) setAppNombreJuego(data.nombreApp);
         const configuredCounts = [
-          parseExerciseCount(data.numeroEjercicios),
+          parseExerciseCount(data.ejercicios),
           parseExerciseCount(data.numeroJuegos),
         ].filter((value): value is number => value !== null);
         if (configuredCounts.length > 0) {
